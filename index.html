@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bolt Torque / Preload Calculator</title>
+  <style>
+    :root{
+      --bg:#f4f4f4;
+      --panel:#f7f7f7;
+      --border:#d0d5dd;
+      --ink:#111;
+      --muted:#555;
+    }
+    *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    body{
+      margin:16px;
+      padding-top:20px;        /* keep header visible */
+      background:var(--bg);
+      color:var(--ink);
+      font-size:14px;
+      min-width:850px;         /* space for both panels */
+      overflow-x:auto;         /* scroll if iframe narrower */
+      overflow-y:visible;
+    }
+    h1{margin:0 0 8px;font-size:18px}
+    .wrap{
+      display:flex;
+      flex-wrap:nowrap;        /* force side-by-side layout */
+      gap:16px;
+      align-items:flex-start;
+    }
+    .panel{
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:12px 14px;
+      min-width:280px;
+      overflow:visible;        /* don’t clip content/title */
+    }
+    .panel h2{
+      margin:0 0 8px;
+      font-size:15px;
+      font-weight:600;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns:150px 1fr 60px;
+      gap:4px 8px;
+      align-items:center;
+    }
+    label{color:var(--muted)}
+    input[type="number"], select{
+      width:100%;
+      padding:4px 6px;
+      border-radius:4px;
+      border:1px solid var(--border);
+      font-size:13px;
+    }
+    input[readonly]{
+      background:#e9ecef;
+      color:#000;
+    }
+    .unit{
+      font-size:12px;
+      color:var(--muted);
+    }
+    .highlight-yellow{background:#fff9c4}
+    .highlight-red{background:#ffcdd2}
+    .footer{
+      margin-top:8px;
+      font-size:11px;
+      color:var(--muted);
+    }
+    .grade-row{
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+    #boltHead{
+      flex:0 0 auto;
+      border:1px solid #ccc;
+      border-radius:6px;
+      background:#ffe7ef; /* light “pink steel” like the book */
+    }
+  </style>
+</head>
+<body>
+  <h1>Bolt Torque / Preload Calculator</h1>
+  <div class="wrap">
+    <!-- INPUTS -->
+    <section class="panel" style="max-width:360px;">
+      <h2>Inputs</h2>
+      <div class="grid">
+        <label for="threadType">Thread Type</label>
+        <select id="threadType">
+          <option value="UNF">UNF</option>
+          <option value="UNC">UNC</option>
+        </select>
+        <span class="unit"></span>
+
+        <label for="threadSize">Thread Size</label>
+        <select id="threadSize"></select>
+        <span class="unit"></span>
+
+        <label for="grade">SAE Grade</label>
+        <div class="grade-row" id="boltHeadWrapper" title="">
+          <select id="grade">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="4">4</option>
+            <option value="5" selected>5</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+          </select>
+          <!-- bolt head graphic -->
+          <svg id="boltHead" width="50" height="50" viewBox="0 0 60 60" aria-hidden="true"></svg>
+        </div>
+        <span class="unit"></span>
+
+        <label for="plusTol">(+)&nbsp;Torque Tolerance</label>
+        <input id="plusTol" type="number" step="0.01" value="5">
+        <span class="unit">%</span>
+
+        <label for="minusTol">(-)&nbsp;Torque Tolerance</label>
+        <input id="minusTol" type="number" step="0.01" value="10">
+        <span class="unit">%</span>
+
+        <label for="minThreadMu">Thread μ (min)</label>
+        <input id="minThreadMu" type="number" step="0.001" value="0.06">
+        <span class="unit"></span>
+
+        <label for="maxThreadMu">Thread μ (max)</label>
+        <input id="maxThreadMu" type="number" step="0.001" value="0.20">
+        <span class="unit"></span>
+
+        <label for="minHeadMu">Head μ (min)</label>
+        <input id="minHeadMu" type="number" step="0.001" value="0.06">
+        <span class="unit"></span>
+
+        <label for="maxHeadMu">Head μ (max)</label>
+        <input id="maxHeadMu" type="number" step="0.001" value="0.15">
+        <span class="unit"></span>
+
+        <label for="torque">Specified Torque</label>
+        <input id="torque" type="number" step="0.01" value="800">
+        <span class="unit">in-lb</span>
+      </div>
+      <div class="footer">
+        Change any input to update the results.
+      </div>
+    </section>
+
+    <!-- OUTPUTS -->
+    <section class="panel" style="min-width:380px;">
+      <h2>Results</h2>
+      <div class="grid">
+        <label>Diameter</label>
+        <input id="diameter" type="number" readonly>
+        <span class="unit">in</span>
+
+        <label>TPI</label>
+        <input id="tpi" type="number" readonly>
+        <span class="unit"></span>
+
+        <label>Tensile Area</label>
+        <input id="tensileArea" type="number" readonly>
+        <span class="unit">in²</span>
+
+        <label>Proof Stress</label>
+        <input id="proofStress" type="number" readonly>
+        <span class="unit">psi</span>
+
+        <label>Yield Stress</label>
+        <input id="yieldStress" type="number" readonly>
+        <span class="unit">psi</span>
+
+        <label>Tensile Stress</label>
+        <input id="tensileStress" type="number" readonly>
+        <span class="unit">psi</span>
+
+        <label>Proof Load</label>
+        <input id="proofLoad" type="number" readonly>
+        <span class="unit">lb</span>
+
+        <label>Yield Load</label>
+        <input id="yieldLoad" type="number" readonly>
+        <span class="unit">lb</span>
+
+        <label>Tensile Load</label>
+        <input id="tensileLoad" type="number" readonly>
+        <span class="unit">lb</span>
+
+        <label>Minimum Preload</label>
+        <input id="minPreload" type="number" readonly>
+        <span class="unit">lb</span>
+
+        <label>Maximum Preload</label>
+        <input id="maxPreload" type="number" readonly>
+        <span class="unit">lb</span>
+
+        <label>Preload / Proof Load</label>
+        <input id="ratioProof" type="number" readonly class="highlight-yellow">
+        <span class="unit">max</span>
+
+        <label>Preload / Min Tensile</label>
+        <input id="ratioTensile" type="number" readonly class="highlight-red">
+        <span class="unit">max</span>
+
+        <label>Nut Factor K</label>
+        <input id="nutFactor" type="number" readonly>
+        <span class="unit"></span>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // -----------------------------
+    // BOLT DATA TABLES
+    // -----------------------------
+
+    const boltDataUNC = [
+      {label:"#1 - 64 UNC",        diameter:0.073,  tpi:64},
+      {label:"#2 - 56 UNC",        diameter:0.086,  tpi:56},
+      {label:"#3 - 48 UNC",        diameter:0.099,  tpi:48},
+      {label:"#4 - 40 UNC",        diameter:0.112,  tpi:40},
+      {label:"#5 - 40 UNC",        diameter:0.125,  tpi:40},
+      {label:"#6 - 32 UNC",        diameter:0.138,  tpi:32},
+      {label:"#8 - 32 UNC",        diameter:0.164,  tpi:32},
+      {label:"#10 - 24 UNC",       diameter:0.19,   tpi:24},
+      {label:"#12 - 24 UNC",       diameter:0.216,  tpi:24},
+      {label:"1/4 - 20 UNC",       diameter:0.25,   tpi:20},
+      {label:"5/16 - 18 UNC",      diameter:0.3125, tpi:18},
+      {label:"3/8 - 16 UNC",       diameter:0.375,  tpi:16},
+      {label:"7/16 - 14 UNC",      diameter:0.4375, tpi:14},
+      {label:"1/2 - 13 UNC",       diameter:0.5,    tpi:13},
+      {label:"9/16 - 12 UNC",      diameter:0.5625, tpi:12},
+      {label:"5/8 - 11 UNC",       diameter:0.625,  tpi:11},
+      {label:"3/4 - 10 UNC",       diameter:0.75,   tpi:10},
+      {label:"7/8 - 9 UNC",        diameter:0.875,  tpi:9},
+      {label:"1 - 8 UNC",          diameter:1.0,    tpi:8},
+      {label:"1 1/8 - 7 UNC",      diameter:1.125,  tpi:7},
+      {label:"1 1/4 - 7 UNC",      diameter:1.25,   tpi:7},
+      {label:"1 3/8 - 6 UNC",      diameter:1.375,  tpi:6},
+      {label:"1 1/2 - 6 UNC",      diameter:1.5,    tpi:6},
+      {label:"1 3/4 - 5 UNC",      diameter:1.75,   tpi:5},
+      {label:"2 - 4 1/2 UNC",      diameter:2.0,    tpi:4.5},
+      {label:"2 1/4 - 4 1/2 UNC",  diameter:2.25,   tpi:4.5},
+      {label:"2 1/2 - 4 UNC",      diameter:2.5,    tpi:4},
+      {label:"2 3/4 - 4 UNC",      diameter:2.75,   tpi:4},
+      {label:"3 - 4 UNC",          diameter:3.0,    tpi:4},
+      {label:"3 1/4 - 4 UNC",      diameter:3.25,   tpi:4},
+      {label:"3 1/2 - 4 UNC",      diameter:3.5,    tpi:4},
+      {label:"3 3/4 - 4 UNC",      diameter:3.75,   tpi:4},
+      {label:"4 - 4 UNC",          diameter:4.0,    tpi:4}
+    ];
+
+    const boltDataUNF = [
+      {label:"#0 - 80 UNF",        diameter:0.06,   tpi:80},
+      {label:"#1 - 72 UNF",        diameter:0.073,  tpi:72},
+      {label:"#2 - 64 UNF",        diameter:0.086,  tpi:64},
+      {label:"#3 - 56 UNF",        diameter:0.099,  tpi:56},
+      {label:"#4 - 48 UNF",        diameter:0.112,  tpi:48},
+      {label:"#5 - 44 UNF",        diameter:0.125,  tpi:44},
+      {label:"#6 - 40 UNF",        diameter:0.138,  tpi:40},
+      {label:"#8 - 36 UNF",        diameter:0.164,  tpi:36},
+      {label:"#10 - 32 UNF",       diameter:0.19,   tpi:32},
+      {label:"#12 - 28 UNF",       diameter:0.216,  tpi:28},
+      {label:"1/4 - 28 UNF",       diameter:0.25,   tpi:28},
+      {label:"5/16 - 24 UNF",      diameter:0.3125, tpi:24},
+      {label:"3/8 - 24 UNF",       diameter:0.375,  tpi:24},
+      {label:"7/16 - 20 UNF",      diameter:0.4375, tpi:20},
+      {label:"1/2 - 20 UNF",       diameter:0.5,    tpi:20},
+      {label:"9/16 - 18 UNF",      diameter:0.5625, tpi:18},
+      {label:"5/8 - 18 UNF",       diameter:0.625,  tpi:18},
+      {label:"3/4 - 16 UNF",       diameter:0.75,   tpi:16},
+      {label:"7/8 - 14 UNF",       diameter:0.875,  tpi:14},
+      {label:"1 - 14 UNF",         diameter:1.0,    tpi:14},
+      {label:"1 1/8 - 12 UNF",     diameter:1.125,  tpi:12},
+      {label:"1 1/4 - 12 UNF",     diameter:1.25,   tpi:12},
+      {label:"1 3/8 - 12 UNF",     diameter:1.375,  tpi:12},
+      {label:"1 1/2 - 12 UNF",     diameter:1.5,    tpi:12}
+    ];
+
+    // -----------------------------
+    // DOM SHORTCUTS
+    // -----------------------------
+
+    const els = {
+      threadType:   document.getElementById("threadType"),
+      threadSize:   document.getElementById("threadSize"),
+      grade:        document.getElementById("grade"),
+      plusTol:      document.getElementById("plusTol"),
+      minusTol:     document.getElementById("minusTol"),
+      minThreadMu:  document.getElementById("minThreadMu"),
+      maxThreadMu:  document.getElementById("maxThreadMu"),
+      minHeadMu:    document.getElementById("minHeadMu"),
+      maxHeadMu:    document.getElementById("maxHeadMu"),
+      torque:       document.getElementById("torque"),
+
+      diameter:     document.getElementById("diameter"),
+      tpi:          document.getElementById("tpi"),
+      tensileArea:  document.getElementById("tensileArea"),
+      proofStress:  document.getElementById("proofStress"),
+      yieldStress:  document.getElementById("yieldStress"),
+      tensileStress:document.getElementById("tensileStress"),
+      proofLoad:    document.getElementById("proofLoad"),
+      yieldLoad:    document.getElementById("yieldLoad"),
+      tensileLoad:  document.getElementById("tensileLoad"),
+      minPreload:   document.getElementById("minPreload"),
+      maxPreload:   document.getElementById("maxPreload"),
+      ratioProof:   document.getElementById("ratioProof"),
+      ratioTensile: document.getElementById("ratioTensile"),
+      nutFactor:    document.getElementById("nutFactor"),
+
+      boltHead:     document.getElementById("boltHead"),
+      boltHeadWrapper: document.getElementById("boltHeadWrapper")
+    };
+
+    function currentTable(){
+      return els.threadType.value === "UNC" ? boltDataUNC : boltDataUNF;
+    }
+
+    function populateSizes(){
+      const table = currentTable();
+      const sel = els.threadSize;
+      const current = sel.value;
+      sel.innerHTML = "";
+      table.forEach((row, i) => {
+        const opt = document.createElement("option");
+        opt.value = row.label;
+        opt.textContent = row.label;
+        if (row.label === current || (i === 0 && !current)) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    }
+
+    function getBoltRow(){
+      const table = currentTable();
+      const label = els.threadSize.value;
+      return table.find(r => r.label === label) || table[0];
+    }
+
+    function num(el){
+      const v = parseFloat(el.value);
+      return isNaN(v) ? 0 : v;
+    }
+
+    // -----------------------------
+    // BOLT HEAD GRAPHIC
+    // -----------------------------
+
+    function updateBoltGraphic(grade){
+      const svg = els.boltHead;
+      const wrapper = els.boltHeadWrapper;
+      const g = parseInt(grade,10);
+
+      wrapper.title = "SAE J429 Grade " + g;
+
+      const cx = 30, cy = 30;
+      const rOuter = 26;
+      const rInner = 20;
+
+      svg.innerHTML = "";
+
+      // hexagon outline
+      const hexPts = [];
+      for (let i = 0; i < 6; i++){
+        const angle = (Math.PI/3)*i - Math.PI/2;
+        const x = cx + rOuter * Math.cos(angle);
+        const y = cy + rOuter * Math.sin(angle);
+        hexPts.push(x + "," + y);
+      }
+      const hex = document.createElementNS("http://www.w3.org/2000/svg","polygon");
+      hex.setAttribute("points", hexPts.join(" "));
+      hex.setAttribute("fill","none");
+      hex.setAttribute("stroke","#000");
+      hex.setAttribute("stroke-width","1.6");
+      svg.appendChild(hex);
+
+      // circular top surface
+      const circ = document.createElementNS("http://www.w3.org/2000/svg","circle");
+      circ.setAttribute("cx",cx);
+      circ.setAttribute("cy",cy);
+      circ.setAttribute("r",rInner);
+      circ.setAttribute("fill","#f4c5d2");
+      circ.setAttribute("stroke","#000");
+      circ.setAttribute("stroke-width","1.4");
+      svg.appendChild(circ);
+
+      // choose marking angles
+      let anglesDeg = [];
+      if (g === 5){
+        anglesDeg = [-90, 30, 150]; // 3 lines
+      } else if (g === 7){
+        anglesDeg = [-90, -18, 54, 126, 198]; // 5 lines
+      } else if (g === 8){
+        anglesDeg = [-90, -30, 30, 90, 150, 210]; // 6 lines
+      } else {
+        // grades 1,2,4: plain head
+        return;
+      }
+
+      const rStart = 6;
+      const rEnd   = rInner - 2;
+
+      anglesDeg.forEach(deg => {
+        const rad = deg * Math.PI / 180;
+        const x1 = cx + rStart * Math.cos(rad);
+        const y1 = cy + rStart * Math.sin(rad);
+        const x2 = cx + rEnd * Math.cos(rad);
+        const y2 = cy + rEnd * Math.sin(rad);
+        const line = document.createElementNS("http://www.w3.org/2000/svg","line");
+        line.setAttribute("x1",x1);
+        line.setAttribute("y1",y1);
+        line.setAttribute("x2",x2);
+        line.setAttribute("y2",y2);
+        line.setAttribute("stroke","#000");
+        line.setAttribute("stroke-width","1.5");
+        svg.appendChild(line);
+      });
+    }
+
+    // -----------------------------
+    // MAIN CALCULATION
+    // -----------------------------
+
+    function recalc(){
+      const row = getBoltRow();
+      const diameter = row.diameter;
+      const TPI = row.tpi;
+
+      els.diameter.value = diameter.toFixed(4);
+      els.tpi.value = TPI;
+
+      const Lead = 1 / TPI;
+      const tensileArea = 0.7854 * Math.pow(diameter - (0.9743 / TPI), 2);
+      els.tensileArea.value = tensileArea.toFixed(5);
+
+      const grade = parseInt(els.grade.value, 10);
+      let proofstress, yieldstress, tensilestress;
+
+      if (grade === 1){
+        proofstress   = 33000;
+        yieldstress   = 36000;
+        tensilestress = 60000;
+      } else if (grade === 2){
+        if (diameter < 0.875){
+          proofstress   = 55000;
+          yieldstress   = 57000;
+          tensilestress = 74000;
+        } else {
+          proofstress   = 33000;
+          yieldstress   = 36000;
+          tensilestress = 60000;
+        }
+      } else if (grade === 4){
+        proofstress   = 65000;
+        yieldstress   = 100000;
+        tensilestress = 115000;
+      } else if (grade === 5){
+        if (diameter < 1.125){
+          proofstress   = 85000;
+          yieldstress   = 92000;
+          tensilestress = 120000;
+        } else {
+          proofstress   = 74000;
+          yieldstress   = 81000;
+          tensilestress = 105000;
+        }
+      } else if (grade === 7){
+        proofstress   = 105000;
+        yieldstress   = 115000;
+        tensilestress = 133000;
+      } else if (grade === 8){
+        proofstress   = 120000;
+        yieldstress   = 130000;
+        tensilestress = 150000;
+      }
+
+      els.proofStress.value   = proofstress.toFixed(0);
+      els.yieldStress.value   = yieldstress.toFixed(0);
+      els.tensileStress.value = tensilestress.toFixed(0);
+
+      const proofload   = proofstress   * tensileArea;
+      const yieldload   = yieldstress   * tensileArea;
+      const tensileload = tensilestress * tensileArea;
+
+      els.proofLoad.value   = proofload.toFixed(1);
+      els.yieldLoad.value   = yieldload.toFixed(1);
+      els.tensileLoad.value = tensileload.toFixed(1);
+
+      const minTorque   = num(els.minusTol);
+      const maxTorque   = num(els.plusTol);
+      const minThreadmu = num(els.minThreadMu);
+      const maxThreadmu = num(els.maxThreadMu);
+      const minHeadmu   = num(els.minHeadMu);
+      const maxHeadmu   = num(els.maxHeadMu);
+      const Torque      = num(els.torque);
+
+      const Dm = diameter - 0.649519 * Lead;
+      const secantalpha = 1.1547;
+
+      let minTF = 0.5 * Dm * (Lead + Math.PI * minThreadmu * Dm * secantalpha) /
+                  (Math.PI * Dm - minThreadmu * Lead * secantalpha);
+      minTF = minTF + minHeadmu * 1.25 * diameter / 2;
+
+      const maxT = (1 + maxTorque / 100) * Torque;
+      const maxP = maxT / minTF;
+
+      let maxTF = 0.5 * Dm * (Lead + Math.PI * maxThreadmu * Dm * secantalpha) /
+                  (Math.PI * Dm - maxThreadmu * Lead * secantalpha);
+      maxTF = maxTF + maxHeadmu * 1.25 * diameter / 2;
+
+      const minT = (1 - minTorque / 100) * Torque;
+      const minP = maxTF > 0 ? (minT / maxTF) : 0;
+
+      els.minPreload.value = minP.toFixed(1);
+      els.maxPreload.value = maxP.toFixed(1);
+
+      if (proofload > 0){
+        els.ratioProof.value = (maxP / proofload).toFixed(3);
+      } else {
+        els.ratioProof.value = "";
+      }
+
+      if (tensileload > 0){
+        els.ratioTensile.value = (maxP / tensileload).toFixed(3);
+      } else {
+        els.ratioTensile.value = "";
+      }
+
+      const tanlambda      = Lead / (Math.PI * Dm);
+      const AverageHeadmu  = (minHeadmu + maxHeadmu) / 2;
+      const AverageThreadmu= (minHeadmu + maxHeadmu) / 2; // kept as in sheet
+
+      const K = 0.5 * (Dm / diameter) *
+                (tanlambda + AverageThreadmu * secantalpha) /
+                (1 - AverageThreadmu * tanlambda * secantalpha) +
+                0.625 * AverageHeadmu;
+
+      els.nutFactor.value = K.toFixed(6);
+
+      updateBoltGraphic(grade);
+    }
+
+    // -----------------------------
+    // INIT + EVENT WIRING
+    // -----------------------------
+
+    function init(){
+      populateSizes();
+      recalc();
+
+      [
+        "threadType","threadSize","grade","plusTol","minusTol",
+        "minThreadMu","maxThreadMu","minHeadMu","maxHeadMu","torque"
+      ].forEach(id => {
+        const el = els[id];
+        el.addEventListener("change", () => {
+          if (id === "threadType") populateSizes();
+          recalc();
+        });
+        el.addEventListener("input", () => {
+          if (id === "threadType") populateSizes();
+          recalc();
+        });
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>
