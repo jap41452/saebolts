@@ -64,8 +64,8 @@
       font-size:12px;
       color:var(--muted);
     }
-    .highlight-yellow{background:#fff9c4}
-    .highlight-red{background:#ffcdd2}
+    .highlight-yellow{background:#fff9c4 !important;}
+    .highlight-red{background:#ffcdd2 !important;}
     .footer{
       margin-top:8px;
       font-size:11px;
@@ -93,8 +93,8 @@
       <div class="grid">
         <label for="threadType">Thread Type</label>
         <select id="threadType">
+          <option value="UNC" selected>UNC</option>
           <option value="UNF">UNF</option>
-          <option value="UNC">UNC</option>
         </select>
         <span class="unit"></span>
 
@@ -142,7 +142,7 @@
         <span class="unit"></span>
 
         <label for="torque">Specified Torque</label>
-        <input id="torque" type="number" step="0.01" value="800">
+        <input id="torque" type="number" step="0.01" value="60">
         <span class="unit">in-lb</span>
       </div>
       <div class="footer">
@@ -199,11 +199,11 @@
         <span class="unit">lb</span>
 
         <label>Preload / Proof Load</label>
-        <input id="ratioProof" type="number" readonly class="highlight-yellow">
+        <input id="ratioProof" type="number" readonly>
         <span class="unit">max</span>
 
         <label>Preload / Min Tensile</label>
-        <input id="ratioTensile" type="number" readonly class="highlight-red">
+        <input id="ratioTensile" type="number" readonly>
         <span class="unit">max</span>
 
         <label>Nut Factor K</label>
@@ -329,7 +329,14 @@
         const opt = document.createElement("option");
         opt.value = row.label;
         opt.textContent = row.label;
-        if (row.label === current || (i === 0 && !current)) opt.selected = true;
+        // if there's already a selection, keep it; otherwise use 1/4 - 20 UNC as default for UNC
+        if (current && row.label === current) {
+          opt.selected = true;
+        } else if (!current && els.threadType.value === "UNC" && row.label === "1/4 - 20 UNC") {
+          opt.selected = true;
+        } else if (!current && !sel.querySelector("option[selected]") && i === 0) {
+          opt.selected = true;
+        }
         sel.appendChild(opt);
       });
     }
@@ -517,14 +524,26 @@
       els.minPreload.value = minP.toFixed(1);
       els.maxPreload.value = maxP.toFixed(1);
 
+      // reset highlight classes before applying new ones
+      els.ratioProof.classList.remove("highlight-yellow");
+      els.ratioTensile.classList.remove("highlight-red");
+
       if (proofload > 0){
-        els.ratioProof.value = (maxP / proofload).toFixed(3);
+        const ratioP = maxP / proofload;
+        els.ratioProof.value = ratioP.toFixed(3);
+        if (ratioP > 1) {
+          els.ratioProof.classList.add("highlight-yellow");
+        }
       } else {
         els.ratioProof.value = "";
       }
 
       if (tensileload > 0){
-        els.ratioTensile.value = (maxP / tensileload).toFixed(3);
+        const ratioT = maxP / tensileload;
+        els.ratioTensile.value = ratioT.toFixed(3);
+        if (ratioT > 1) {
+          els.ratioTensile.classList.add("highlight-red");
+        }
       } else {
         els.ratioTensile.value = "";
       }
@@ -548,7 +567,8 @@
     // -----------------------------
 
     function init(){
-      populateSizes();
+      // defaults already set in HTML: UNC, grade 5, torque 60
+      populateSizes();   // will select 1/4 - 20 UNC for UNC thread
       recalc();
 
       [
@@ -571,3 +591,4 @@
   </script>
 </body>
 </html>
+
